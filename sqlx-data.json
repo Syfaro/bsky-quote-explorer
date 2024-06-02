@@ -26,20 +26,6 @@
     },
     "query": "SELECT\n    uri,\n    id\nFROM\n    thread_node\nWHERE\n    thread_root_id = $1;\n"
   },
-  "126eb75aa9b5da0652af82c0025a7cd34241b9a23b0dad9f8e94a7fa52d65d00": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int8",
-          "Int8",
-          "Int8"
-        ]
-      }
-    },
-    "query": "INSERT INTO\n    thread_edge (thread_root_id, source_node_id, target_node_id)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
-  },
   "20162d95df2006ed6919f9821169c851acc1939722647ca11b162b823ccfecf3": {
     "describe": {
       "columns": [],
@@ -52,6 +38,44 @@
       }
     },
     "query": "INSERT INTO\n    did_information (did, also_known_as)\nVALUES\n    ($1, $2) ON CONFLICT (did) DO\nUPDATE\nSET\n    also_known_as = $2,\n    updated_at = current_timestamp;\n"
+  },
+  "76ed52bc0ea5740083a275ca2906be662fb8f07c23a45d11f5236ae1dc76c702": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "source_node_id",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "target_node_id",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "edge_type!",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    id,\n    source_node_id,\n    target_node_id,\n    edge_type::text \"edge_type!\"\nFROM\n    thread_edge\nWHERE\n    thread_root_id = $1;\n"
   },
   "93b45447773aac130db75005a71d04b5064c31a042b322b2a363e444a9a2d0f4": {
     "describe": {
@@ -143,7 +167,7 @@
     },
     "query": "INSERT INTO\n    thread_root (uri)\nVALUES\n    ($1) ON CONFLICT (uri) DO\nUPDATE\nSET\n    updated_at = current_timestamp RETURNING id;\n"
   },
-  "b582d437a99aa2e6a7c639b82697fe107770f6307eeb730d72d80645fba5bbd7": {
+  "b1ae9f2e4ade78d3d43d46d0e0f9fbe47b6a690b47f8c929dacceb07e00d4bd3": {
     "describe": {
       "columns": [
         {
@@ -165,33 +189,43 @@
         ]
       }
     },
-    "query": "INSERT INTO\n    thread_node (thread_root_id, uri, did, created_at, post_text)\nVALUES\n    ($1, $2, $3, $4, $5) RETURNING id;\n"
+    "query": "INSERT INTO\n    thread_node (thread_root_id, uri, did, created_at, post_text)\nVALUES\n    ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING id;\n"
   },
-  "e2897d3ba6b2bc521ff54ce71c01819ae4018755c6f2fc0fe9cfc24acc3f8245": {
+  "de7034b797feb3e5a0e12100ae919442d380bca76af65cce8f4da7ef733c8b1b": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8",
+          "Int8",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    thread_edge (thread_root_id, source_node_id, target_node_id, edge_type)\nVALUES\n    ($1, $2, $3, $4::text::edge_type) ON CONFLICT DO NOTHING;\n"
+  },
+  "e9705cee59826c724a591ae797be156e1657b9d9b16b045a627ba46c99e0de85": {
     "describe": {
       "columns": [
         {
-          "name": "source_node_id",
+          "name": "id",
           "ordinal": 0,
-          "type_info": "Int8"
-        },
-        {
-          "name": "target_node_id",
-          "ordinal": 1,
           "type_info": "Int8"
         }
       ],
       "nullable": [
-        false,
         false
       ],
       "parameters": {
         "Left": [
-          "Int8"
+          "Int8",
+          "Text"
         ]
       }
     },
-    "query": "SELECT\n    source_node_id,\n    target_node_id\nFROM\n    thread_edge\nWHERE\n    thread_root_id = $1;\n"
+    "query": "SELECT\n    id\nFROM\n    thread_node\nWHERE\n    thread_root_id = $1\n    AND uri = $2;\n"
   },
   "efe1767a9dafa39a15c644f406a96683d19e37836aaf94d72e8cd26671a90667": {
     "describe": {

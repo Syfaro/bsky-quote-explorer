@@ -106,10 +106,19 @@ struct NodeInfo {
     text: String,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EdgeType {
+    Quote,
+    Reply,
+}
+
 #[derive(Serialize)]
 struct EdgeInfo {
+    id: i64,
     source: i64,
     target: i64,
+    edge_type: EdgeType,
 }
 
 #[derive(Serialize)]
@@ -135,8 +144,10 @@ async fn collect_info(conn: &PgPool, uri: &str) -> eyre::Result<GraphResponse> {
         .fetch_all(conn);
     let edges = sqlx::query_file!("queries/info/get_edges.sql", root_id)
         .map(|row| EdgeInfo {
+            id: row.id,
             source: row.source_node_id,
             target: row.target_node_id,
+            edge_type: serde_plain::from_str(&row.edge_type).unwrap(),
         })
         .fetch_all(conn);
 
@@ -351,42 +362,64 @@ impl DbTree {
     }
 
     #[instrument(err, skip_all)]
-    async fn process(&mut self, data: MessageData) -> eyre::Result<bool> {
+    async fn process(&mut self, data: MessageData) -> eyre::Result<()> {
         let post_uri = format!("at://{}/{}", data.repo, data.path);
         if self.uris.contains(&post_uri) && !self.known_nodes.contains_key(&post_uri) {
             tracing::info!("known uri that isn't known node, adding");
             self.add_node(post_uri, &data.post).await?;
 
-            return Ok(true);
+            return Ok(());
         }
 
-        let record = match &data.post.embed {
-            Some(Union::Refs(RecordEmbedRefs::AppBskyEmbedRecordMain(main))) => {
-                tracing::trace!("found embed record");
-                &main.record
-            }
-            _ => {
-                tracing::trace!("no embed record");
-                return Ok(false);
-            }
-        };
-
-        let embedding_uri = &record.uri;
-        if !self.uris.contains(embedding_uri) {
-            tracing::trace!(embedding_uri, "known uris does not contain");
-            return Ok(false);
+        if let Post {
+            embed: Some(Union::Refs(RecordEmbedRefs::AppBskyEmbedRecordMain(main))),
+            ..
+        } = &data.post
+        {
+            self.process_post(&main.record.uri, &post_uri, &data.post, EdgeType::Quote)
+                .await?;
         }
-        tracing::info!(embedding_uri, "found known uri");
+
+        if let Post {
+            reply: Some(reply_ref),
+            ..
+        } = &data.post
+        {
+            self.process_post(
+                &reply_ref.parent.uri,
+                &post_uri,
+                &data.post,
+                EdgeType::Reply,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn process_post(
+        &mut self,
+        uri: &str,
+        post_uri: &str,
+        post: &Post,
+        edge_type: EdgeType,
+    ) -> eyre::Result<()> {
+        if !self.uris.contains(uri) {
+            tracing::trace!(uri, "known uris does not contain");
+            return Ok(());
+        }
+        tracing::info!(uri, "found known uri");
 
         let source_node_id = *self
             .known_nodes
-            .get(embedding_uri)
-            .ok_or_else(|| eyre::eyre!("missing id for uri {embedding_uri}"))?;
-        let target_node_id = self.add_node(post_uri, &data.post).await?;
+            .get(uri)
+            .ok_or_else(|| eyre::eyre!("missing id for uri {uri}"))?;
+        let target_node_id = self.add_node(post_uri.to_string(), post).await?;
 
-        self.add_edge(source_node_id, target_node_id).await?;
+        self.add_edge(source_node_id, target_node_id, edge_type)
+            .await?;
 
-        Ok(true)
+        Ok(())
     }
 
     #[instrument(err, skip(self, post))]
@@ -412,8 +445,18 @@ impl DbTree {
             created_at,
             post.text
         )
-        .fetch_one(&self.conn)
+        .fetch_optional(&self.conn)
         .await?;
+
+        let node_id = if let Some(node_id) = node_id {
+            node_id
+        } else {
+            tracing::warn!("node was not inserted, looking up");
+
+            sqlx::query_file_scalar!("queries/tree/get_thread_node.sql", self.root_id, uri)
+                .fetch_one(&self.conn)
+                .await?
+        };
 
         self.known_nodes.insert(uri.clone(), node_id);
         self.uris.insert(uri);
@@ -423,12 +466,18 @@ impl DbTree {
     }
 
     #[instrument(err, skip(self))]
-    async fn add_edge(&self, source_node_id: i64, target_node_id: i64) -> eyre::Result<()> {
+    async fn add_edge(
+        &self,
+        source_node_id: i64,
+        target_node_id: i64,
+        edge_type: EdgeType,
+    ) -> eyre::Result<()> {
         sqlx::query_file!(
             "queries/tree/insert_thread_edge.sql",
             self.root_id,
             source_node_id,
-            target_node_id
+            target_node_id,
+            serde_plain::to_string(&edge_type).unwrap(),
         )
         .execute(&self.conn)
         .await?;
