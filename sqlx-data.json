@@ -1,0 +1,216 @@
+{
+  "db": "PostgreSQL",
+  "03d454e43735e670b464b92ada8c26cff9684e1dae0f4e868e0b213635efe7bc": {
+    "describe": {
+      "columns": [
+        {
+          "name": "uri",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "id",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    uri,\n    id\nFROM\n    thread_node\nWHERE\n    thread_root_id = $1;\n"
+  },
+  "126eb75aa9b5da0652af82c0025a7cd34241b9a23b0dad9f8e94a7fa52d65d00": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    thread_edge (thread_root_id, source_node_id, target_node_id)\nVALUES\n    ($1, $2, $3) ON CONFLICT DO NOTHING;\n"
+  },
+  "20162d95df2006ed6919f9821169c851acc1939722647ca11b162b823ccfecf3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    did_information (did, also_known_as)\nVALUES\n    ($1, $2) ON CONFLICT (did) DO\nUPDATE\nSET\n    also_known_as = $2,\n    updated_at = current_timestamp;\n"
+  },
+  "93b45447773aac130db75005a71d04b5064c31a042b322b2a363e444a9a2d0f4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "uri",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "did",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "post_text",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "also_known_as",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    id,\n    uri,\n    thread_node.did,\n    created_at,\n    post_text,\n    also_known_as\nFROM\n    thread_node\n    LEFT JOIN did_information ON did_information.did = thread_node.did\nWHERE\n    thread_root_id = $1;\n"
+  },
+  "a8c371a343cc636671fb3374dfe7e56577c88689cf036c84057a0d7b44988438": {
+    "describe": {
+      "columns": [
+        {
+          "name": "also_known_as",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    also_known_as\nFROM\n    did_information\nWHERE\n    did = $1;\n"
+  },
+  "aa5136fbf97a335bc3ae5c1b061f5bbfccac98b3d13b3b6125e3e278615c4e64": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    thread_root (uri)\nVALUES\n    ($1) ON CONFLICT (uri) DO\nUPDATE\nSET\n    updated_at = current_timestamp RETURNING id;\n"
+  },
+  "b582d437a99aa2e6a7c639b82697fe107770f6307eeb730d72d80645fba5bbd7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Text",
+          "Text",
+          "Timestamptz",
+          "Text"
+        ]
+      }
+    },
+    "query": "INSERT INTO\n    thread_node (thread_root_id, uri, did, created_at, post_text)\nVALUES\n    ($1, $2, $3, $4, $5) RETURNING id;\n"
+  },
+  "bd643ea857374689bfc97aa95434489d927cb0bc448433ae4e4f60fe9504cc38": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT id FROM thread_root WHERE uri = $1"
+  },
+  "e2897d3ba6b2bc521ff54ce71c01819ae4018755c6f2fc0fe9cfc24acc3f8245": {
+    "describe": {
+      "columns": [
+        {
+          "name": "source_node_id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "target_node_id",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "SELECT\n    source_node_id,\n    target_node_id\nFROM\n    thread_edge\nWHERE\n    thread_root_id = $1;\n"
+  }
+}
