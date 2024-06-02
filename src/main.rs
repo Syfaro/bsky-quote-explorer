@@ -13,14 +13,15 @@ use atrium_api::{
 };
 use axum::{
     extract::{Query, State},
-    Router,
+    http::StatusCode,
+    Json, Router,
 };
 use clap::Parser;
 use futures::StreamExt;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::instrument;
 
 #[derive(Parser)]
@@ -80,6 +81,7 @@ async fn main() -> eyre::Result<()> {
     let app = Router::new()
         .route("/generic", axum::routing::get(generic))
         .route("/graphviz", axum::routing::get(graphviz))
+        .fallback_service(ServeDir::new("static"))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
@@ -117,10 +119,9 @@ struct GraphResponse {
 }
 
 async fn collect_info(conn: &PgPool, uri: &str) -> eyre::Result<GraphResponse> {
-    let root_id = sqlx::query_scalar!("SELECT id FROM thread_root WHERE uri = $1", uri)
+    let root_id = sqlx::query_file_scalar!("queries/info/get_id.sql", uri)
         .fetch_one(conn)
-        .await
-        .unwrap();
+        .await?;
 
     let nodes = sqlx::query_file!("queries/info/get_nodes.sql", root_id)
         .map(|row| NodeInfo {
@@ -147,14 +148,21 @@ async fn collect_info(conn: &PgPool, uri: &str) -> eyre::Result<GraphResponse> {
 async fn generic(
     State(state): State<Arc<AppState>>,
     Query(query): Query<GraphQuery>,
-) -> axum::response::Json<GraphResponse> {
-    let resp = collect_info(&state.conn, &query.uri).await.unwrap();
+) -> Result<Json<GraphResponse>, StatusCode> {
+    let resp = collect_info(&state.conn, &query.uri)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    axum::response::Json(resp)
+    Ok(Json(resp))
 }
 
-async fn graphviz(State(state): State<Arc<AppState>>, Query(query): Query<GraphQuery>) -> String {
-    let resp = collect_info(&state.conn, &query.uri).await.unwrap();
+async fn graphviz(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<GraphQuery>,
+) -> Result<String, StatusCode> {
+    let resp = collect_info(&state.conn, &query.uri)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut output = String::new();
     output.push_str("digraph tree {\n");
@@ -179,7 +187,7 @@ async fn graphviz(State(state): State<Arc<AppState>>, Query(query): Query<GraphQ
 
     output.push_str("}\n");
 
-    output
+    Ok(output)
 }
 
 async fn connect_nats(config: &Config) -> eyre::Result<async_nats::Client> {

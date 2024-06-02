@@ -167,26 +167,6 @@
     },
     "query": "INSERT INTO\n    thread_node (thread_root_id, uri, did, created_at, post_text)\nVALUES\n    ($1, $2, $3, $4, $5) RETURNING id;\n"
   },
-  "bd643ea857374689bfc97aa95434489d927cb0bc448433ae4e4f60fe9504cc38": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "SELECT id FROM thread_root WHERE uri = $1"
-  },
   "e2897d3ba6b2bc521ff54ce71c01819ae4018755c6f2fc0fe9cfc24acc3f8245": {
     "describe": {
       "columns": [
@@ -212,5 +192,25 @@
       }
     },
     "query": "SELECT\n    source_node_id,\n    target_node_id\nFROM\n    thread_edge\nWHERE\n    thread_root_id = $1;\n"
+  },
+  "efe1767a9dafa39a15c644f406a96683d19e37836aaf94d72e8cd26671a90667": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT\n    id\nFROM\n    thread_root\nWHERE\n    uri = $1;\n"
   }
 }

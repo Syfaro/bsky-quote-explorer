@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+
+  <title>Bluesky Quote Explorer</title>
+
+  <style>
+    #viewer {
+      height: 100%;
+      width: 100%;
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html {
+        background-color: black;
+        color: white;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="viewer"></div>
+
+  <script src="https://unpkg.com/cytoscape@3.29.2/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+
+  <script>
+    async function main() {
+      const resp = await fetch("/generic?uri=at://did:plc:rzo5xkl7skyv45npuzd2vv5u/app.bsky.feed.post/3ktt5v6m65c2y");
+      const data = await resp.json();
+
+      const colorQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+      const elements = {
+        nodes: data.nodes.map((node) => {
+          const name = node["also_known_as"].replace("at://", "");
+          return { data: { name, ...node } };
+        }),
+        edges: data.edges.map((edge) => {
+          return { data: edge };
+        }),
+      };
+
+      const cy = cytoscape({
+        container: document.getElementById("viewer"),
+        elements,
+        style: [
+          {
+            selector: "node",
+            style: {
+              label: "data(name)",
+              color: colorQuery.matches ? "white" : "black",
+            }
+          }
+        ],
+        layout: {
+          name: "dagre",
+          nodeDimensionsIncludeLabels: true
+        }
+      });
+
+      cy.autounselectify(true);
+
+      cy.on("tap", "node", function() {
+        const uri = this.data("uri");
+        const parts = uri.split("/");
+        const bsky = `https://bsky.app/profile/${parts[2]}/post/${parts[4]}`;
+        window.open(bsky, "_blank");
+      });
+
+      addEventListener("resize", () => {
+        cy.resize();
+        cy.fit();
+      });
+
+      colorQuery.addEventListener("change", () => {
+        const color = colorQuery.matches ? "white" : "black";
+        cy.nodes().style("color", color);
+      });
+    }
+
+    main().then(() => console.debug("Done!"));
+  </script>
+</body>
+
+</html>
