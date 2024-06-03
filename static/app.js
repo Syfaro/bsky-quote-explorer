@@ -18,6 +18,8 @@ async function main() {
     }),
   };
 
+  let layoutEngine = "dagre";
+
   const cy = cytoscape({
     container: document.getElementById("viewer"),
     elements,
@@ -37,7 +39,7 @@ async function main() {
       },
     ],
     layout: {
-      name: "dagre",
+      name: layoutEngine,
       nodeDimensionsIncludeLabels: true,
     },
   });
@@ -89,10 +91,19 @@ async function main() {
     });
 
     cy.layout({
-      name: "dagre",
+      name: layoutEngine,
       nodeDimensionsIncludeLabels: true,
     }).run();
   }
+
+  function setLayoutEngine(name) {
+    layoutEngine = name;
+    filterData();
+  }
+
+  document.getElementById("layout-select").addEventListener("change", (ev) => {
+    setLayoutEngine(ev.target.value);
+  });
 
   Array.from(document.querySelectorAll("input.edge-filter")).forEach((elem) => {
     elem.addEventListener("change", (ev) => {

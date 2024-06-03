@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use askama::Template;
 use async_nats::{jetstream::consumer, ServerAddr};
 use atrium_api::{
     app::bsky::feed::post::{Record as Post, RecordEmbedRefs},
@@ -43,7 +44,7 @@ struct Config {
     pub bind_addr: SocketAddr,
 
     #[clap(long, env)]
-    pub root_uri: String,
+    pub root_uri: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,19 +70,27 @@ async fn main() -> eyre::Result<()> {
     let pool = PgPool::connect(&config.database_url).await?;
     sqlx::migrate!().run(&pool).await?;
 
-    let nats = connect_nats(&config).await?;
+    if let Some(root_uri) = config.root_uri.clone() {
+        tracing::info!("updating thread {root_uri}");
 
-    let js = async_nats::jetstream::new(nats);
-    let resolver = Arc::new(DidResolver::new(pool.clone(), client.clone()));
+        let nats = connect_nats(&config).await?;
+        let js = async_nats::jetstream::new(nats);
 
-    tokio::spawn(start_thread(pool.clone(), resolver, js, config.root_uri));
+        let resolver = Arc::new(DidResolver::new(pool.clone(), client.clone()));
+
+        tokio::spawn(start_thread(pool.clone(), resolver, js, root_uri));
+    } else {
+        tracing::info!("only serving preloaded threads");
+    }
 
     let app_state = Arc::new(AppState { conn: pool });
 
     let app = Router::new()
+        .route("/", axum::routing::get(index))
         .route("/generic", axum::routing::get(generic))
         .route("/graphviz", axum::routing::get(graphviz))
-        .fallback_service(ServeDir::new("static"))
+        .route("/health", axum::routing::get(|| async { "OK" }))
+        .nest_service("/static", ServeDir::new("static"))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
@@ -89,6 +98,14 @@ async fn main() -> eyre::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate;
+
+async fn index() -> IndexTemplate {
+    IndexTemplate
 }
 
 #[derive(Deserialize)]

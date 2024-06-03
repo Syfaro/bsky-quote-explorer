@@ -7,7 +7,7 @@
 
   <title>Bluesky Quote Explorer</title>
 
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/static/app.css?{{ env!("CARGO_PKG_VERSION") }}">
 </head>
 
 <body>
@@ -26,14 +26,24 @@
     <p>
       <label>
         <input type="checkbox" checked name="edge-filter" value="quote" class="edge-filter">
-        Show <span class="blue">blue</span> quotes.
+        Show <span class="blue">blue</span> quotes
       </label>
     </p>
 
     <p>
       <label>
         <input type="checkbox" checked name="edge-filter" value="reply" class="edge-filter">
-        Show <span class="green">green</span> replies.
+        Show <span class="green">green</span> replies
+      </label>
+    </p>
+
+    <p id="layout-container">
+      <label>
+        <select id="layout-select" name="layout">
+          <option selected value="dagre">Tree</option>
+          <option value="cose">Force graph</option>
+        </select>
+        Layout
       </label>
     </p>
   </div>
@@ -42,7 +52,7 @@
   <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.js"></script>
   <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 
-  <script src="/app.js"></script>
+  <script src="/static/app.js?{{ env!("CARGO_PKG_VERSION") }}"></script>
 </body>
 
 </html>
