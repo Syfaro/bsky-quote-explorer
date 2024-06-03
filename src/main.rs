@@ -27,12 +27,12 @@ use tracing::instrument;
 
 #[derive(Parser)]
 struct Config {
-    #[clap(long, env("DATABASE_URL"))]
+    #[clap(long, env)]
     pub database_url: String,
 
     #[clap(
         long,
-        env("NATS_HOST"),
+        env,
         use_value_delimiter = true,
         value_delimiter = ','
     )]
@@ -43,7 +43,12 @@ struct Config {
     #[clap(long, env, default_value = "0.0.0.0:8080")]
     pub bind_addr: SocketAddr,
 
-    #[clap(long, env)]
+    #[clap(
+        long,
+        env,
+        requires("nats_host"),
+        requires("nats_nkey")
+    )]
     pub root_uri: Option<String>,
 }
 
