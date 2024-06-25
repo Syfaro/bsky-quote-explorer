@@ -1,7 +1,9 @@
 async function main() {
-  const resp = await fetch(
-    "/generic?uri=at://did:plc:rzo5xkl7skyv45npuzd2vv5u/app.bsky.feed.post/3ktt5v6m65c2y"
-  );
+  const query = new URLSearchParams(window.location.search);
+  const uri =
+    query.get("uri") ||
+    "at://did:plc:rzo5xkl7skyv45npuzd2vv5u/app.bsky.feed.post/3ktt5v6m65c2y";
+  const resp = await fetch(`/generic?uri=${uri}`);
   const data = await resp.json();
 
   const colorQuery = window.matchMedia("(prefers-color-scheme: dark)");

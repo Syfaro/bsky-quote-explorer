@@ -30,12 +30,7 @@ struct Config {
     #[clap(long, env)]
     pub database_url: String,
 
-    #[clap(
-        long,
-        env,
-        use_value_delimiter = true,
-        value_delimiter = ','
-    )]
+    #[clap(long, env, use_value_delimiter = true, value_delimiter = ',')]
     pub nats_host: Vec<ServerAddr>,
     #[clap(long, env("NATS_NKEY"))]
     pub nats_nkey: Option<String>,
@@ -47,12 +42,14 @@ struct Config {
         long,
         env,
         requires("nats_host"),
-        requires("nats_nkey")
+        requires("nats_nkey"),
+        use_value_delimiter = true,
+        value_delimiter = ','
     )]
-    pub root_uri: Option<String>,
+    pub root_uris: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 struct MessageData {
     repo: String,
     path: String,
@@ -75,15 +72,23 @@ async fn main() -> eyre::Result<()> {
     let pool = PgPool::connect(&config.database_url).await?;
     sqlx::migrate!().run(&pool).await?;
 
-    if let Some(root_uri) = config.root_uri.clone() {
-        tracing::info!("updating thread {root_uri}");
+    if !config.root_uris.is_empty() {
+        tracing::info!("updating threads: {}", config.root_uris.join(", "));
 
         let nats = connect_nats(&config).await?;
         let js = async_nats::jetstream::new(nats);
 
         let resolver = Arc::new(DidResolver::new(pool.clone(), client.clone()));
+        let rx = start_consumer(js).await?;
 
-        tokio::spawn(start_thread(pool.clone(), resolver, js, root_uri));
+        for root_uri in config.root_uris {
+            tokio::spawn(start_thread(
+                pool.clone(),
+                resolver.clone(),
+                rx.clone(),
+                root_uri,
+            ));
+        }
     } else {
         tracing::info!("only serving preloaded threads");
     }
@@ -235,12 +240,9 @@ async fn connect_nats(config: &Config) -> eyre::Result<async_nats::Client> {
     Ok(nats)
 }
 
-async fn start_thread(
-    pool: PgPool,
-    resolver: Arc<DidResolver>,
+async fn start_consumer(
     js: async_nats::jetstream::Context,
-    root: String,
-) -> eyre::Result<()> {
+) -> eyre::Result<async_broadcast::Receiver<MessageData>> {
     let stream = js.get_stream("bsky-ingest").await?;
     let consumer = stream
         .create_consumer(consumer::pull::Config {
@@ -249,22 +251,39 @@ async fn start_thread(
         })
         .await?;
 
-    let mut tree = DbTree::new(pool, resolver, root).await?;
+    let (tx, rx) = async_broadcast::broadcast(128);
 
     let mut messages = consumer.messages().await?;
 
-    while let Some(Ok(msg)) = messages.next().await {
-        msg.ack().await.map_err(|err| eyre::format_err!(err))?;
+    tokio::spawn(async move {
+        while let Some(Ok(msg)) = messages.next().await {
+            msg.ack().await.expect("could not ack message");
 
-        let Ok(data) = serde_json::from_slice::<MessageData>(&msg.payload) else {
-            tracing::warn!(
-                "could not decode post: {}",
-                String::from_utf8_lossy(&msg.payload)
-            );
-            continue;
-        };
+            let Ok(data) = serde_json::from_slice::<MessageData>(&msg.payload) else {
+                tracing::warn!(
+                    "could not decode post: {}",
+                    String::from_utf8_lossy(&msg.payload)
+                );
+                continue;
+            };
 
-        tree.process(data).await?;
+            tx.broadcast(data).await.expect("could not send message");
+        }
+    });
+
+    Ok(rx)
+}
+
+async fn start_thread(
+    pool: PgPool,
+    resolver: Arc<DidResolver>,
+    mut rx: async_broadcast::Receiver<MessageData>,
+    root: String,
+) -> eyre::Result<()> {
+    let mut tree = DbTree::new(pool, resolver, root).await?;
+
+    while let Some(data) = rx.next().await {
+        tree.process(data).await?
     }
 
     Ok(())
